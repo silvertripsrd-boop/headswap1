@@ -16,28 +16,32 @@ jobs:
       - name: 1. Clonar código del repositorio
         uses: actions/checkout@v4
 
-      - name: 2. Configurar JDK 17 (Actualizado a v5)
+      - name: 2. Configurar JDK 17
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
 
-      - name: 3. Inyectar certificados SSL y ajustar SDK para Android 14
+      - name: 3. Crear certificados SSL locales y ajustar SDK para Android 14
         run: |
           mkdir -p android/app/src/main/assets/aa/jvc
           mkdir -p android/app/src/main/assets/aa/hur
-          
-          # Descargar certificados públicos JVC / HUR
-          curl -f -sL https://raw.githubusercontent.com/f1xpl/aasdk/development/cert/headunit.crt -o android/app/src/main/assets/aa/jvc/cert.pem || \
-          curl -f -sL https://raw.githubusercontent.com/opencardev/aasdk/development/cert/headunit.crt -o android/app/src/main/assets/aa/jvc/cert.pem
-          
-          curl -f -sL https://raw.githubusercontent.com/f1xpl/aasdk/development/cert/headunit.key -o android/app/src/main/assets/aa/jvc/key.pem || \
-          curl -f -sL https://raw.githubusercontent.com/opencardev/aasdk/development/cert/headunit.key -o android/app/src/main/assets/aa/jvc/key.pem
-          
+
+          # Intentar bajar de headunit-revived y, si falla, generar/escribir el PEM directamente
+          curl -f -sL https://raw.githubusercontent.com/andreknieriem/headunit-revived/master/app/src/main/res/raw/cert -o android/app/src/main/assets/aa/jvc/cert.pem || \
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout android/app/src/main/assets/aa/jvc/key.pem \
+            -out android/app/src/main/assets/aa/jvc/cert.pem \
+            -days 3650 -subj "/C=JP/ST=Tokyo/L=Tokyo/O=JVCKENWOOD/OU=Automotive/CN=JVCKENWOOD"
+
+          if [ ! -f android/app/src/main/assets/aa/jvc/key.pem ]; then
+            curl -f -sL https://raw.githubusercontent.com/andreknieriem/headunit-revived/master/app/src/main/res/raw/privkey -o android/app/src/main/assets/aa/jvc/key.pem || true
+          fi
+
           cp android/app/src/main/assets/aa/jvc/cert.pem android/app/src/main/assets/aa/hur/cert.pem
           cp android/app/src/main/assets/aa/jvc/key.pem android/app/src/main/assets/aa/hur/key.pem
-          
+
           # Forzar compatibilidad con Android 14 (minSdk 29 / targetSdk 34)
           sed -i 's/minSdk\s*=\s*[0-9]\+/minSdk = 29/g' android/app/build.gradle* || true
           sed -i 's/minSdkVersion([0-9]\+)/minSdkVersion(29)/g' android/app/build.gradle* || true
